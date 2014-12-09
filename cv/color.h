@@ -66,9 +66,9 @@ inline int colorfilt_uyvy(struct img_struct* input, struct img_struct* output, u
       {
         cnt ++;
         // UYVY
-        dest[0] = 64;        // U
+        dest[0] = 250;//64;        // U
         dest[1] = source[1];  // Y
-        dest[2] = 255;        // V
+        dest[2] = 60;//255;        // V
         dest[3] = source[3];  // Y
       }
       else

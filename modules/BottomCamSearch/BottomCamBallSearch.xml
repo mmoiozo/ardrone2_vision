@@ -9,7 +9,7 @@
     <file name="bottomcamsearch.h"/>
   </header>
 
-  <periodic fun="bottomcamsearch_run()" freq="1" start="bottomcamsearch_start()" stop="bottomcamsearch_stop()" autorun="TRUE"/>
+  <periodic fun="bottomcamsearch_run()" freq="20" start="bottomcamsearch_start()" stop="bottomcamsearch_stop()" autorun="TRUE"/>
   <makefile>
       <raw>
 
@@ -24,7 +24,7 @@ $(TARGET).srcs += $(DIR_LIB)/udp/socket.c
 $(TARGET).srcs += $(DIR_LIB)/v4l/video.c
 $(TARGET).srcs += $(DIR_LIB)/v4l/ardrone2.c
 $(TARGET).CFLAGS += -I$(DIR_MODULES) -I$(DIR_CV) -I$(DIR_LIB) -pthread -D__USE_GNU
-$(TARGET).LDFLAGS += -pthread -lrt
+$(TARGET).LDFLAGS += -pthread -lrt -static
 
     </raw>
   </makefile>
