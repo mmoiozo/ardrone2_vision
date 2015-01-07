@@ -29,6 +29,14 @@
 // Threaded computer vision
 #include <pthread.h>
 
+//Messages
+#include "messages.h"
+#include "subsystems/datalink/downlink.h"
+#include "subsystems/datalink/pprz_transport.h"
+
+//Attitude
+
+
 
 uint8_t color_lum_min = 105;
 uint8_t color_lum_max = 205;
@@ -39,9 +47,20 @@ uint8_t color_cr_max  = 255;
 
 int color_count = 0;
 
+uint16_t blob_center_x = 0;
+uint16_t blob_center_y = 0;
+
+uint16_t cp_value_u = 0;
+uint16_t cp_value_v = 0;
+
+uint16_t integral_max_x = 3;
+uint16_t integral_max_y = 4;
+
+int32_t blob_debug_x = 0;
+int32_t blob_debug_y = 0;
+
 void bottomcamsearch_run(void) {
 }
-
 
 /////////////////////////////////////////////////////////////////////////
 // COMPUTER VISION THREAD
@@ -56,6 +75,9 @@ void bottomcamsearch_run(void) {
 
 #include <stdio.h>
 #include <string.h>
+
+//attitude
+#include "state.h" 
 
 pthread_t computervision_thread;
 volatile uint8_t computervision_thread_status = 0;
@@ -76,17 +98,17 @@ void *computervision_thread_main(void* data)
   }
 
   // Video Grabbing
-  struct img_struct* img_new = video_create_image(&vid);
+  //struct img_struct* img_new = video_create_image(&vid);
 
   // Video Resizing
   #define DOWNSIZE_FACTOR   2
-  uint8_t quality_factor = 50; // From 0 to 99 (99=high)
+  uint8_t quality_factor = 20; // From 0 to 99 (99=high) 50
   uint8_t dri_jpeg_header = 0;
-  int millisleep = 250;
+  int millisleep = 25;//250
 
   struct img_struct small;
-  small.w = vid.w / DOWNSIZE_FACTOR;
-  small.h = vid.h / DOWNSIZE_FACTOR;
+  small.w = vid.w; /// DOWNSIZE_FACTOR;
+  small.h = vid.h;/// DOWNSIZE_FACTOR;
   small.buf = (uint8_t*)malloc(small.w*small.h*2);
 
 
@@ -96,21 +118,37 @@ void *computervision_thread_main(void* data)
   // Network Transmit
   struct UdpSocket* vsock;
   vsock = udp_socket("192.168.1.255", 5000, 5001, FMS_BROADCAST);
+  
+  //compensation angles
+  int32_t phi_temp = 0;
+  int32_t theta_temp = 0;
+  struct FloatEulers* body_angle;
 
   while (computer_vision_thread_command > 0)
   {
     usleep(1000* millisleep);
-    video_grab_image(&vid, img_new);
+    video_grab_image(&vid, &small);
 
-    // Resize: device by 4
-    resize_uyuv(img_new, &small, DOWNSIZE_FACTOR);
-
-    color_count = colorfilt_uyvy(&small,&small,
+    color_count = colorblob_uyvy(&small,&small,
         color_lum_min,color_lum_max,
         color_cb_min,color_cb_max,
-        color_cr_min,color_cr_max
+        color_cr_min,color_cr_max,
+	&blob_center_x,
+	&blob_center_y,
+	&cp_value_u,
+        &cp_value_v
         );
 
+    
+    body_angle 	= stateGetNedToBodyEulers_f();
+    phi_temp 	= ANGLE_BFP_OF_REAL(body_angle->phi);
+    theta_temp 	= (int32_t)body_angle->theta;
+    blob_debug_x = (int32_t)blob_center_x;
+    blob_debug_y = (int32_t)blob_center_y;
+    
+    DOWNLINK_SEND_BLOB_DEBUG(DefaultChannel, DefaultDevice, &blob_debug_x, &blob_debug_y, &phi_temp, &theta_temp);//&cp_value_u, &cp_value_v);
+    
+    
     printf("ColorCount = %d \n", color_count);
 
     // JPEG encode the image:
