@@ -195,15 +195,16 @@ void *computervision_thread_main(void* data)
     px_angle_x = (((float)blob_center_x - 80)/Fx)-body_angle->phi;
     px_angle_y = (((float)blob_center_y - 120)/Fy)-body_angle->theta;
     
-    h = (float)ins_impl.sonar_z*100;//stateGetPositionEnu_f()->z;// sonar_z is an integer with unit [mm]
+    h = (float)ins_impl.sonar_z*100;// h in cm
     
-    x_pos = h;//(tanf(px_angle_x)*h)*100; //x_pos in cm
+    x_pos = (tanf(px_angle_x)*h); //x_pos in cm
+    y_pos = (tanf(px_angle_y)*h); // y_pos in cm
     
     //prepare for debug send
     phi_temp 	= ANGLE_BFP_OF_REAL(px_angle_x);
     theta_temp 	= ANGLE_BFP_OF_REAL(px_angle_y);//body_angle->theta);
-    blob_debug_x = (int32_t)h;
-    blob_debug_y = (int32_t)blob_center_y;
+    blob_debug_x = (int32_t)x_pos;
+    blob_debug_y = (int32_t)y_pos;
     
     DOWNLINK_SEND_BLOB_DEBUG(DefaultChannel, DefaultDevice, &blob_debug_x, &blob_debug_y, &phi_temp, &theta_temp);//&cp_value_u, &cp_value_v);
     
