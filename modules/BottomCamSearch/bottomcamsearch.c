@@ -34,7 +34,8 @@
 #include "subsystems/datalink/downlink.h"
 #include "subsystems/datalink/pprz_transport.h"
 
-//Attitude
+// Timing
+#include <sys/time.h>
 
 
 
@@ -59,6 +60,14 @@ uint16_t integral_max_y = 4;
 int32_t blob_debug_x = 0;
 int32_t blob_debug_y = 0;
 
+float px_angle_x = 0.0;
+float px_angle_y = 0.0;
+
+float h = 0.0;
+
+float x_pos = 0.0;
+float y_pos = 0.0;
+
 void bottomcamsearch_run(void) {
 }
 
@@ -78,6 +87,38 @@ void bottomcamsearch_run(void) {
 
 //attitude
 #include "state.h" 
+// Calculations
+#include <math.h>
+#include "subsystems/ins/ins_int.h" // used for ins.sonar_z
+
+// Timers
+struct timeval start_time;
+struct timeval end_time;
+
+#define USEC_PER_MS 1000
+#define USEC_PER_SEC 1000000
+
+#define Fx		171.5606 // because due to chroma downsampling in x 343.1211 // Camera focal length (px/rad)
+#define Fy		348.5053 // Camera focal length (px/rad)
+volatile long time_elapsed (struct timeval *t1, struct timeval *t2);
+volatile long time_elapsed (struct timeval *t1, struct timeval *t2)
+{
+	long sec, usec;
+	sec = t2->tv_sec - t1->tv_sec;
+	usec = t2->tv_usec - t1->tv_usec;
+	if (usec < 0) {
+	--sec;
+	usec = usec + USEC_PER_SEC;
+	}
+	return sec*USEC_PER_SEC + usec;
+}
+void start_timer() {
+	gettimeofday(&start_time, NULL);
+}
+long end_timer() {
+	gettimeofday(&end_time, NULL);
+	return time_elapsed(&start_time, &end_time);
+}
 
 pthread_t computervision_thread;
 volatile uint8_t computervision_thread_status = 0;
@@ -104,7 +145,7 @@ void *computervision_thread_main(void* data)
   #define DOWNSIZE_FACTOR   2
   uint8_t quality_factor = 20; // From 0 to 99 (99=high) 50
   uint8_t dri_jpeg_header = 0;
-  int millisleep = 25;//250
+  int millisleep = 1;//25;//250
 
   struct img_struct small;
   small.w = vid.w; /// DOWNSIZE_FACTOR;
@@ -123,10 +164,19 @@ void *computervision_thread_main(void* data)
   int32_t phi_temp = 0;
   int32_t theta_temp = 0;
   struct FloatEulers* body_angle;
+  
+  //timing
+  long 	diffTime;
+  int32_t dt = 0;
 
   while (computer_vision_thread_command > 0)
   {
     usleep(1000* millisleep);
+    
+    diffTime = end_timer();
+    start_timer();
+    dt = (int32_t)(diffTime)/USEC_PER_MS;
+    
     video_grab_image(&vid, &small);
 
     color_count = colorblob_uyvy(&small,&small,
@@ -141,9 +191,18 @@ void *computervision_thread_main(void* data)
 
     
     body_angle 	= stateGetNedToBodyEulers_f();
-    phi_temp 	= ANGLE_BFP_OF_REAL(body_angle->phi);
-    theta_temp 	= (int32_t)body_angle->theta;
-    blob_debug_x = (int32_t)blob_center_x;
+    
+    px_angle_x = (((float)blob_center_x - 80)/Fx)-body_angle->phi;
+    px_angle_y = (((float)blob_center_y - 120)/Fy)-body_angle->theta;
+    
+    h = (float)ins_impl.sonar_z/1000;// sonar_z is an integer with unit [mm]
+    
+    x_pos = tanf(px_angle_x)*h;
+    
+    //prepare for debug send
+    phi_temp 	= ANGLE_BFP_OF_REAL(px_angle_x);
+    theta_temp 	= ANGLE_BFP_OF_REAL(px_angle_y);//body_angle->theta);
+    blob_debug_x = (int32_t)x_pos;
     blob_debug_y = (int32_t)blob_center_y;
     
     DOWNLINK_SEND_BLOB_DEBUG(DefaultChannel, DefaultDevice, &blob_debug_x, &blob_debug_y, &phi_temp, &theta_temp);//&cp_value_u, &cp_value_v);
