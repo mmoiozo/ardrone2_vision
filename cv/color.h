@@ -119,6 +119,7 @@ inline int colorblob_uyvy(struct img_struct* input, struct img_struct* output, u
       if(x == 80 && y == output->h/2)
       {
 	*cp_u = dest[0];       // U
+	//*cp_u = dest[1];       // Y
         *cp_v = dest[2];        // V
       }
       

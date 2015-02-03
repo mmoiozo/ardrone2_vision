@@ -33,18 +33,27 @@
 #include "messages.h"
 #include "subsystems/datalink/downlink.h"
 #include "subsystems/datalink/pprz_transport.h"
+#include "subsystems/datalink/telemetry.h"
 
 // Timing
 #include <sys/time.h>
 
 
-
+/*
 uint8_t color_lum_min = 105;
 uint8_t color_lum_max = 205;
 uint8_t color_cb_min  = 52;
 uint8_t color_cb_max  = 140;
 uint8_t color_cr_min  = 180;
 uint8_t color_cr_max  = 255;
+*/
+
+uint8_t color_lum_min = 60;
+uint8_t color_lum_max = 160;
+uint8_t color_cb_min  = 95;
+uint8_t color_cb_max  = 125;
+uint8_t color_cr_min  = 170;
+uint8_t color_cr_max  = 240;
 
 int color_count = 0;
 
@@ -67,6 +76,15 @@ float h = 0.0;
 
 float x_pos = 0.0;
 float y_pos = 0.0;
+
+//compensation angles
+  int32_t phi_temp = 0;
+  int32_t theta_temp = 0;
+  struct FloatEulers* body_angle;
+  
+  //timing
+  long 	diffTime;
+  int32_t dt = 0;
 
 void bottomcamsearch_run(void) {
 }
@@ -100,6 +118,13 @@ struct timeval end_time;
 
 #define Fx		171.5606 // because due to chroma downsampling in x 343.1211 // Camera focal length (px/rad)
 #define Fy		348.5053 // Camera focal length (px/rad)
+
+
+ static void send_blob_debug(void) {
+ DOWNLINK_SEND_BLOB_DEBUG(DefaultChannel, DefaultDevice, &blob_debug_x, &blob_debug_y, &phi_temp, &theta_temp);//&cp_value_u, &cp_value_v);
+ }
+
+
 volatile long time_elapsed (struct timeval *t1, struct timeval *t2);
 volatile long time_elapsed (struct timeval *t1, struct timeval *t2)
 {
@@ -160,14 +185,6 @@ void *computervision_thread_main(void* data)
   struct UdpSocket* vsock;
   vsock = udp_socket("192.168.1.255", 5000, 5001, FMS_BROADCAST);
   
-  //compensation angles
-  int32_t phi_temp = 0;
-  int32_t theta_temp = 0;
-  struct FloatEulers* body_angle;
-  
-  //timing
-  long 	diffTime;
-  int32_t dt = 0;
 
   while (computer_vision_thread_command > 0)
   {
@@ -204,10 +221,7 @@ void *computervision_thread_main(void* data)
     phi_temp 	= ANGLE_BFP_OF_REAL(px_angle_x);
     theta_temp 	= ANGLE_BFP_OF_REAL(px_angle_y);//body_angle->theta);
     blob_debug_x = (int32_t)x_pos;
-    blob_debug_y = (int32_t)y_pos;
-    
-    DOWNLINK_SEND_BLOB_DEBUG(DefaultChannel, DefaultDevice, &blob_debug_x, &blob_debug_y, &phi_temp, &theta_temp);//&cp_value_u, &cp_value_v);
-    
+    blob_debug_y = (int32_t)y_pos; 
     
     printf("ColorCount = %d \n", color_count);
 
@@ -243,6 +257,9 @@ void bottomcamsearch_start(void)
   if(rc) {
     printf("ctl_Init: Return code from pthread_create(mot_thread) is %d\n", rc);
   }
+  
+  register_periodic_telemetry(DefaultPeriodic, "BLOB_DEBUG", send_blob_debug);
+  
 }
 
 void bottomcamsearch_stop(void)
